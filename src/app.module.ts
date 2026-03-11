@@ -1,25 +1,27 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AdvisorsModule } from './advisors/advisors.module';
 
 @Module({
   imports: [
-    // Загружаем переменные из .env файла
-    ConfigModule.forRoot(),
-    
-    // Настраиваем подключение к PostgreSQL
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      url: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false, // Обязательно для Neon
-      },
-      // Мы НЕ используем synchronize: true, так как в задании сказано "not auto-sync"
-      synchronize: false,
-      autoLoadEntities: true,
+    ConfigModule.forRoot({ isGlobal: true }),
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        url: configService.get<string>('DATABASE_URL'),
+        ssl: {
+          rejectUnauthorized: false,
+        },
+        synchronize: false,
+        autoLoadEntities: true, // <-- Возвращаем автоматический поиск сущностей
+      }),
     }),
+    AdvisorsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
