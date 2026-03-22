@@ -1,26 +1,44 @@
 import { Injectable } from '@nestjs/common';
-import { CreateQuizDto } from './dto/create-quiz.dto';
-import { UpdateQuizDto } from './dto/update-quiz.dto';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { QuizResponse } from './entities/quiz-response.entity';
+import { Match } from './entities/match.entity';
+import { Advisor } from '../advisors/entities/advisor.entity';
 
 @Injectable()
 export class QuizService {
-  create(createQuizDto: CreateQuizDto) {
-    return 'This action adds a new quiz';
-  }
+  constructor(
+    @InjectRepository(QuizResponse) private quizResponseRepo: Repository<QuizResponse>,
+    @InjectRepository(Match) private matchRepo: Repository<Match>,
+    @InjectRepository(Advisor) private advisorRepo: Repository<Advisor>,
+  ) {}
 
-  findAll() {
-    return `This action returns all quiz`;
-  }
+  async processQuiz(sessionId: string, answers: any) {
+    const quizResponse = this.quizResponseRepo.create({ sessionId, answers });
+    const savedResponse = await this.quizResponseRepo.save(quizResponse);
 
-  findOne(id: number) {
-    return `This action returns a #${id} quiz`;
-  }
+    const advisors = await this.advisorRepo.find();
 
-  update(id: number, updateQuizDto: UpdateQuizDto) {
-    return `This action updates a #${id} quiz`;
-  }
+    const scoredAdvisors = advisors.map(advisor => {
+      const score = Math.floor(Math.random() * 50) + 50; 
+      return { advisor, score };
+    });
 
-  remove(id: number) {
-    return `This action removes a #${id} quiz`;
+    scoredAdvisors.sort((a, b) => b.score - a.score);
+    const top3 = scoredAdvisors.slice(0, 3);
+
+    const matchesToSave = top3.map(item => {
+      return this.matchRepo.create({
+        quizResponseId: savedResponse.id,
+        advisorId: item.advisor.id,
+        score: item.score,
+      });
+    });
+    await this.matchRepo.save(matchesToSave);
+
+    return {
+      quizResponseId: savedResponse.id,
+      matches: top3,
+    };
   }
 }
